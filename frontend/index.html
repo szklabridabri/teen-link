@@ -822,8 +822,22 @@
     </div>
 
     <script>
-// ==================== KONFIGURACJA ====================
-const API_URL = 'http://localhost:3000/api';
+// ==================== KONFIGURACJA API ====================
+const API_URL = (function() {
+    // Dla Render.com
+    if (window.location.hostname.includes('onrender.com')) {
+        return window.location.origin + '/api';
+    }
+    // Dla localhost
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:3000/api';
+    }
+    // Domyślnie
+    return window.location.origin + '/api';
+})();
+
+console.log('📡 API URL:', API_URL);
+
 let currentUser = null;
 let mockUsers = [];
 let mockPosts = [];
