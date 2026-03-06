@@ -892,24 +892,54 @@ async function loadAllMessages() {
 // ==================== ŁADOWANIE Z SERWERA ====================
 async function loadFromServer() {
     try {
-        const res = await fetch(API_URL + '/sync');
-        const data = await res.json();
-        mockUsers = data.users || [];
-        mockPosts = data.posts || [];
-        mockGroups = data.groups || [];
-        mockLikes = data.likes || { posts: {}, profiles: {} };
+        console.log('Łączę z serwerem:', API_URL);
         
-        // Jeśli jest zalogowany użytkownik, załaduj jego wiadomości
-        if (currentUser) {
-            await loadAllMessages();
+        // Dodaj timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+        
+        const response = await fetch(API_URL + '/sync', {
+            signal: controller.signal,
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        console.log(`✅ Załadowano: ${mockUsers.length} użytkowników, ${mockPosts.length} postów`);
+        const data = await response.json();
+        
+        if (data.users) {
+            mockUsers = data.users;
+            console.log(`✅ Załadowano ${data.users.length} użytkowników`);
+        }
+        if (data.posts) {
+            mockPosts = data.posts;
+            console.log(`✅ Załadowano ${data.posts.length} postów`);
+        }
+        if (data.groups) {
+            mockGroups = data.groups;
+            console.log(`✅ Załadowano ${data.groups.length} grup`);
+        }
+        if (data.likes) {
+            mockLikes = data.likes;
+        }
+        
+        return true;
     } catch (error) {
-        console.error('❌ Błąd ładowania z serwera:', error);
+        console.error('❌ Błąd ładowania z serwera:', error.message);
+        
+        // Pokaż komunikat dla użytkownika
+        showNotification('Problem z połączeniem z serwerem. Sprawdź czy backend działa.');
+        
+        return false;
     }
 }
-
 // ==================== ZAPIS NA SERWERZE ====================
 async function saveToServer(type, data) {
     try {
