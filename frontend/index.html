@@ -902,31 +902,51 @@ async function loadAllMessages() {
         console.error('❌ Błąd ładowania wiadomości:', error);
     }
 }
-
+        
 // ==================== ŁADOWANIE Z SERWERA ====================
 async function loadFromServer() {
     try {
-        console.log('Łączę z serwerem:', API_URL);
+        console.log('🔄 Próba połączenia z:', API_URL + '/sync');
         
-        // Dodaj timeout
+        // Sprawdź najpierw czy serwer w ogóle odpowiada
+        try {
+            const testResponse = await fetch(API_URL.replace('/api', ''), { 
+                method: 'HEAD',
+                mode: 'cors',
+                cache: 'no-cache'
+            });
+            console.log('✅ Serwer główny odpowiada');
+        } catch (e) {
+            console.warn('⚠️ Serwer główny nie odpowiada, próbuję API...');
+        }
+        
+        // Właściwe zapytanie
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+        const timeoutId = setTimeout(() => {
+            controller.abort();
+            console.error('⏰ Timeout połączenia');
+        }, 8000);
         
         const response = await fetch(API_URL + '/sync', {
-            signal: controller.signal,
+            method: 'GET',
             headers: {
                 'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            }
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache'
+            },
+            mode: 'cors',
+            cache: 'no-cache',
+            signal: controller.signal
         });
         
         clearTimeout(timeoutId);
         
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
         const data = await response.json();
+        console.log('📦 Otrzymane dane:', data);
         
         if (data.users) {
             mockUsers = data.users;
@@ -944,15 +964,56 @@ async function loadFromServer() {
             mockLikes = data.likes;
         }
         
+        // Jeśli udało się połączyć, ukryj komunikat
+        document.getElementById('connectionError')?.remove();
+        
         return true;
     } catch (error) {
         console.error('❌ Błąd ładowania z serwera:', error.message);
         
         // Pokaż komunikat dla użytkownika
-        showNotification('Problem z połączeniem z serwerem. Sprawdź czy backend działa.');
+        showConnectionError(error.message);
         
+        // Załaduj dane awaryjne
+        loadFallbackData();
         return false;
     }
+}
+
+// Funkcja awaryjna (około linii 1792)
+function loadFallbackData() {  
+    showNotification('⚠️ Serwer nie odpowiada.');
+}
+
+// Funkcja do wyświetlania błędu połączenia
+function showConnectionError(details) {
+    const errorDiv = document.createElement('div');
+    errorDiv.id = 'connectionError';
+    errorDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #ff6b6b;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 60px;
+        z-index: 9999;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    `;
+    errorDiv.innerHTML = `
+        <i class="fa-regular fa-circle-exclamation"></i>
+        <span>Brak połączenia z serwerem. Używam danych lokalnych.</span>
+        <button onclick="this.parentElement.remove()" style="background: none; border: none; color: white; margin-left: 12px; cursor: pointer;">✕</button>
+    `;
+    document.body.appendChild(errorDiv);
+    
+    // Ukryj po 10 sekundach
+    setTimeout(() => errorDiv.remove(), 10000);
 }
 // ==================== ZAPIS NA SERWERZE ====================
 async function saveToServer(type, data) {
